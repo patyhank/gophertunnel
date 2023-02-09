@@ -667,13 +667,15 @@ func (conn *Conn) handleRequestNetworkSettings(pk *packet.RequestNetworkSettings
 		}
 	}
 	if !found {
-		status := packet.PlayStatusLoginFailedClient
-		if pk.ClientProtocol > protocol.CurrentProtocol {
-			// The server is outdated in this case, so we have to change the status we send.
-			status = packet.PlayStatusLoginFailedServer
-		}
-		_ = conn.WritePacket(&packet.PlayStatus{Status: status})
-		return fmt.Errorf("%v connected with an incompatible protocol: expected protocol = %v, client protocol = %v", conn.identityData.DisplayName, protocol.CurrentProtocol, pk.ClientProtocol)
+		conn.proto = conn.acceptedProto[0]
+		conn.pool = conn.acceptedProto[0].Packets()
+		//	status := packet.PlayStatusLoginFailedClient
+		//	if pk.ClientProtocol > protocol.CurrentProtocol {
+		//		// The server is outdated in this case, so we have to change the status we send.
+		//		status = packet.PlayStatusLoginFailedServer
+		//	}
+		//	_ = conn.WritePacket(&packet.PlayStatus{Status: status})
+		//	return fmt.Errorf("%v connected with an incompatible protocol: expected protocol = %v, client protocol = %v", conn.identityData.DisplayName, protocol.CurrentProtocol, pk.ClientProtocol)
 	}
 
 	conn.expect(packet.IDLogin)
