@@ -994,6 +994,45 @@ func (conn *Conn) handleResourcePackClientResponse(pk *packet.ResourcePackClient
 // startGame sends a StartGame packet using the game data of the connection.
 func (conn *Conn) startGame() {
 	data := conn.gameData
+	if strings.HasPrefix(conn.clientData.GameVersion, "1.19.5") {
+		_ = conn.WritePacket(&packet.StartGamev560{
+			Difficulty:                   data.Difficulty,
+			EntityUniqueID:               data.EntityUniqueID,
+			EntityRuntimeID:              data.EntityRuntimeID,
+			PlayerGameMode:               data.PlayerGameMode,
+			PlayerPosition:               data.PlayerPosition,
+			Pitch:                        data.Pitch,
+			Yaw:                          data.Yaw,
+			WorldSeed:                    data.WorldSeed,
+			Dimension:                    data.Dimension,
+			WorldSpawn:                   data.WorldSpawn,
+			EditorWorld:                  data.EditorWorld,
+			PersonaDisabled:              data.PersonaDisabled,
+			CustomSkinsDisabled:          data.CustomSkinsDisabled,
+			GameRules:                    data.GameRules,
+			Time:                         data.Time,
+			Blocks:                       data.CustomBlocks,
+			Items:                        data.Items,
+			AchievementsDisabled:         true,
+			Generator:                    1,
+			EducationFeaturesEnabled:     true,
+			MultiPlayerGame:              true,
+			MultiPlayerCorrelationID:     uuid.Must(uuid.NewRandom()).String(),
+			CommandsEnabled:              true,
+			WorldName:                    data.WorldName,
+			LANBroadcastEnabled:          true,
+			PlayerMovementSettings:       data.PlayerMovementSettings,
+			WorldGameMode:                data.WorldGameMode,
+			ServerAuthoritativeInventory: data.ServerAuthoritativeInventory,
+			PlayerPermissions:            data.PlayerPermissions,
+			Experiments:                  data.Experiments,
+			ClientSideGeneration:         data.ClientSideGeneration,
+			ChatRestrictionLevel:         data.ChatRestrictionLevel,
+			DisablePlayerInteractions:    data.DisablePlayerInteractions,
+			BaseGameVersion:              data.BaseGameVersion,
+			GameVersion:                  conn.clientData.GameVersion,
+		})
+	}
 	_ = conn.WritePacket(&packet.StartGame{
 		Difficulty:                   data.Difficulty,
 		EntityUniqueID:               data.EntityUniqueID,
