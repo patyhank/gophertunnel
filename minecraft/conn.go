@@ -122,7 +122,7 @@ type Conn struct {
 	packQueue            *resourcePackQueue
 	// downloadResourcePack is an optional function passed to a Dial() call. If set, each resource pack received
 	// from the server will call this function to see if it should be downloaded or not.
-	downloadResourcePack func(id uuid.UUID, version string) bool
+	downloadResourcePack func(id uuid.UUID, version string, currentPack, totalPacks int) bool
 	// ignoredResourcePacks is a slice of resource packs that are not being downloaded due to the downloadResourcePack
 	// func returning false for the specific pack.
 	ignoredResourcePacks []exemptedResourcePack
@@ -681,7 +681,7 @@ func (conn *Conn) handleRequestNetworkSettings(pk *packet.RequestNetworkSettings
 	conn.expect(packet.IDLogin)
 	if err := conn.WritePacket(&packet.NetworkSettings{
 		CompressionThreshold: 512,
-		CompressionAlgorithm: conn.compression,
+		CompressionAlgorithm: conn.compression.EncodeCompression(),
 	}); err != nil {
 		return fmt.Errorf("error sending network settings: %v", err)
 	}
@@ -693,8 +693,12 @@ func (conn *Conn) handleRequestNetworkSettings(pk *packet.RequestNetworkSettings
 
 // handleNetworkSettings handles an incoming NetworkSettings packet, enabling compression for future packets.
 func (conn *Conn) handleNetworkSettings(pk *packet.NetworkSettings) error {
-	conn.enc.EnableCompression(pk.CompressionAlgorithm)
-	conn.dec.EnableCompression(pk.CompressionAlgorithm)
+	alg, ok := packet.CompressionByID(pk.CompressionAlgorithm)
+	if !ok {
+		return fmt.Errorf("unknown compression algorithm: %v", pk.CompressionAlgorithm)
+	}
+	conn.enc.EnableCompression(alg)
+	conn.dec.EnableCompression(alg)
 	conn.readyToLogin = true
 	return nil
 }
@@ -818,20 +822,21 @@ func (conn *Conn) handleClientCacheStatus(pk *packet.ClientCacheStatus) error {
 func (conn *Conn) handleResourcePacksInfo(pk *packet.ResourcePacksInfo) error {
 	// First create a new resource pack queue with the information in the packet so we can download them
 	// properly later.
+	totalPacks := len(pk.TexturePacks) + len(pk.BehaviourPacks)
 	conn.packQueue = &resourcePackQueue{
-		packAmount:       len(pk.TexturePacks) + len(pk.BehaviourPacks),
+		packAmount:       totalPacks,
 		downloadingPacks: make(map[string]downloadingPack),
 		awaitingPacks:    make(map[string]*downloadingPack),
 	}
-	packsToDownload := make([]string, 0, len(pk.TexturePacks)+len(pk.BehaviourPacks))
+	packsToDownload := make([]string, 0, totalPacks)
 
-	for _, pack := range pk.TexturePacks {
+	for index, pack := range pk.TexturePacks {
 		if _, ok := conn.packQueue.downloadingPacks[pack.UUID]; ok {
 			conn.log.Printf("duplicate texture pack entry %v in resource pack info\n", pack.UUID)
 			conn.packQueue.packAmount--
 			continue
 		}
-		if conn.downloadResourcePack != nil && !conn.downloadResourcePack(uuid.MustParse(pack.UUID), pack.Version) {
+		if conn.downloadResourcePack != nil && !conn.downloadResourcePack(uuid.MustParse(pack.UUID), pack.Version, index, totalPacks) {
 			conn.ignoredResourcePacks = append(conn.ignoredResourcePacks, exemptedResourcePack{
 				uuid:    pack.UUID,
 				version: pack.Version,
@@ -848,13 +853,13 @@ func (conn *Conn) handleResourcePacksInfo(pk *packet.ResourcePacksInfo) error {
 			contentKey: pack.ContentKey,
 		}
 	}
-	for _, pack := range pk.BehaviourPacks {
+	for index, pack := range pk.BehaviourPacks {
 		if _, ok := conn.packQueue.downloadingPacks[pack.UUID]; ok {
 			conn.log.Printf("duplicate behaviour pack entry %v in resource pack info\n", pack.UUID)
 			conn.packQueue.packAmount--
 			continue
 		}
-		if conn.downloadResourcePack != nil && !conn.downloadResourcePack(uuid.MustParse(pack.UUID), pack.Version) {
+		if conn.downloadResourcePack != nil && !conn.downloadResourcePack(uuid.MustParse(pack.UUID), pack.Version, index, totalPacks) {
 			conn.ignoredResourcePacks = append(conn.ignoredResourcePacks, exemptedResourcePack{
 				uuid:    pack.UUID,
 				version: pack.Version,

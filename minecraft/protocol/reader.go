@@ -147,6 +147,13 @@ func (r *Reader) SubChunkPos(x *SubChunkPos) {
 	r.Varint32(&x[2])
 }
 
+// SoundPos reads an mgl32.Vec3 that serves as a position for a sound.
+func (r *Reader) SoundPos(x *mgl32.Vec3) {
+	var b BlockPos
+	r.BlockPos(&b)
+	*x = mgl32.Vec3{float32(b[0]) / 8, float32(b[1]) / 8, float32(b[2]) / 8}
+}
+
 // ByteFloat reads a rotational float32 from a single byte.
 func (r *Reader) ByteFloat(x *float32) {
 	var v uint8
@@ -189,8 +196,11 @@ func (r *Reader) Bytes(p *[]byte) {
 
 // NBT reads a compound tag into a map from the underlying buffer.
 func (r *Reader) NBT(m *map[string]any, encoding nbt.Encoding) {
+	dec := nbt.NewDecoderWithEncoding(r.r, encoding)
+	dec.AllowZero = true
+
 	*m = make(map[string]any)
-	if err := nbt.NewDecoderWithEncoding(r.r, encoding).Decode(m); err != nil {
+	if err := dec.Decode(m); err != nil {
 		r.panic(err)
 	}
 }
@@ -267,7 +277,6 @@ func (r *Reader) EntityMetadata(x *map[uint32]any) {
 
 	var count uint32
 	r.Varuint32(&count)
-	r.LimitUint32(count, mediumLimit)
 	for i := uint32(0); i < count; i++ {
 		var key, dataType uint32
 		r.Varuint32(&key)
@@ -331,6 +340,8 @@ func (r *Reader) ItemDescriptorCount(i *ItemDescriptorCount) {
 		i.Descriptor = &ItemTagItemDescriptor{}
 	case ItemDescriptorDeferred:
 		i.Descriptor = &DeferredItemDescriptor{}
+	case ItemDescriptorComplexAlias:
+		i.Descriptor = &ComplexAliasItemDescriptor{}
 	default:
 		r.UnknownEnumOption(id, "item descriptor type")
 		return
@@ -445,12 +456,101 @@ func (r *Reader) Item(x *ItemStack) {
 	}
 }
 
-// MaterialReducer writes a material reducer to the writer.
+// StackRequestAction reads a StackRequestAction from the reader.
+func (r *Reader) StackRequestAction(x *StackRequestAction) {
+	var id uint8
+	r.Uint8(&id)
+	if !lookupStackRequestAction(id, x) {
+		r.UnknownEnumOption(id, "stack request action type")
+		return
+	}
+	(*x).Marshal(r)
+}
+
+// MaterialReducer reads a material reducer from the reader.
 func (r *Reader) MaterialReducer(m *MaterialReducer) {
 	var mix int32
 	r.Varint32(&mix)
 	m.InputItem = ItemType{NetworkID: mix << 16, MetadataValue: uint32(mix & 0x7fff)}
 	Slice(r, &m.Outputs)
+}
+
+// Recipe reads a Recipe from the reader.
+func (r *Reader) Recipe(x *Recipe) {
+	var recipeType int32
+	r.Varint32(&recipeType)
+	if !lookupRecipe(recipeType, x) {
+		r.UnknownEnumOption(recipeType, "crafting data recipe type")
+		return
+	}
+	(*x).Unmarshal(r)
+}
+
+// EventType reads an Event's type from the reader.
+func (r *Reader) EventType(x *Event) {
+	var t int32
+	r.Varint32(&t)
+	if !lookupEvent(t, x) {
+		r.UnknownEnumOption(t, "event packet event type")
+	}
+}
+
+// TransactionDataType reads an InventoryTransactionData type from the reader.
+func (r *Reader) TransactionDataType(x *InventoryTransactionData) {
+	var transactionType uint32
+	r.Varuint32(&transactionType)
+	if !lookupTransactionData(transactionType, x) {
+		r.UnknownEnumOption(transactionType, "inventory transaction data type")
+	}
+}
+
+// AbilityValue reads an ability value from the reader.
+func (r *Reader) AbilityValue(x *any) {
+	valType, boolVal, floatVal := uint8(0), false, float32(0)
+	r.Uint8(&valType)
+	r.Bool(&boolVal)
+	r.Float32(&floatVal)
+	switch valType {
+	case 1:
+		*x = boolVal
+	case 2:
+		*x = floatVal
+	default:
+		r.InvalidValue(valType, "ability value type", "must be bool or float32")
+	}
+}
+
+// Commands reads a Command slice and its constraints from a reader.
+func (r *Reader) Commands(commands *[]Command, constraints *[]CommandEnumConstraint) {
+	var ctx AvailableCommandsContext
+
+	// First we read all the enum values and suffixes.
+	FuncSlice(r, &ctx.EnumValues, r.String)
+	FuncSlice(r, &ctx.Suffixes, r.String)
+
+	// After that we create all enums, which are composed of pointers to the enum values above.
+	FuncIOSlice(r, &ctx.Enums, ctx.Enum)
+
+	// We read all the commands, which will have their enums and suffixes set automatically. We don't yet set
+	// the dynamic enums as we haven't read them yet.
+	FuncIOSlice(r, commands, ctx.CommandData)
+
+	// We first read all soft enums of the packet.
+	Slice(r, &ctx.DynamicEnums)
+
+	// After we've read all soft enums, we need to match them with the values that are set in the commands
+	// that we read before.
+	for i, command := range *commands {
+		for j, overload := range command.Overloads {
+			for k, param := range overload.Parameters {
+				if param.Type&CommandArgSoftEnum != 0 {
+					(*commands)[i].Overloads[j].Parameters[k].Enum = ctx.DynamicEnums[param.Type&0xffff]
+				}
+			}
+		}
+	}
+
+	FuncIOSlice(r, constraints, ctx.EnumConstraint)
 }
 
 // LimitUint32 checks if the value passed is lower than the limit passed. If not, the Reader panics.
