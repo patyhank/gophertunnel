@@ -218,7 +218,7 @@ func (listener *Listener) listen() {
 // accepted once its login sequence is complete.
 func (listener *Listener) createConn(netConn net.Conn) {
 	conn := newConn(netConn, listener.key, listener.cfg.ErrorLog, proto{}, listener.cfg.FlushRate)
-	conn.acceptedProto = append(listener.cfg.AcceptedProtocols, proto{})
+	conn.acceptedProto = append(listener.cfg.AcceptedProtocols, proto{}, V575Protocol)
 	conn.compression = listener.cfg.Compression
 	conn.pool = conn.proto.Packets()
 

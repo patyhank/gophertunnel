@@ -1,7 +1,8 @@
-package packet
+package packetV567
 
 import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
+	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
 // RequestChunkRadius is sent by the client to the server to update the server on the chunk view radius that
@@ -16,10 +17,9 @@ type RequestChunkRadius struct {
 
 // ID ...
 func (*RequestChunkRadius) ID() uint32 {
-	return IDRequestChunkRadius
+	return packet.IDRequestChunkRadius
 }
 
 func (pk *RequestChunkRadius) Marshal(io protocol.IO) {
 	io.Varint32(&pk.ChunkRadius)
-	io.Varint32(&pk.MaxChunkRadius)
 }

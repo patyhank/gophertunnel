@@ -3,6 +3,7 @@ package minecraft
 import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	packetV567 "github.com/sandertv/gophertunnel/minecraft/protocol/packet/v567"
 )
 
 // Protocol represents the Minecraft protocol used to communicate over network. It comprises a unique set of packets
@@ -45,3 +46,21 @@ func (p proto) ConvertFromLatest(pk packet.Packet, _ *Conn) []packet.Packet {
 // DefaultProtocol is the Protocol implementation using as default, In default it is current protocol, version and packet
 // pool and does not convert any packets, as they are already of the right type.
 var DefaultProtocol = proto{}
+
+// proto is the default Protocol implementation. It returns the current protocol, version and packet pool and does not
+// convert any packets, as they are already of the right type.
+type protoV575 struct{}
+
+func (protoV575) ID() int32              { return 575 }
+func (p protoV575) Ver() string          { return protocol.CurrentVersion }
+func (p protoV575) Packets() packet.Pool { return packetV567.NewPool() }
+func (p protoV575) ConvertToLatest(pk packet.Packet, _ *Conn) []packet.Packet {
+	return []packet.Packet{pk}
+}
+func (p protoV575) ConvertFromLatest(pk packet.Packet, _ *Conn) []packet.Packet {
+	return []packet.Packet{pk}
+}
+
+// V575Protocol is the Protocol implementation using as default, In default it is current protocol, version and packet
+// pool and does not convert any packets, as they are already of the right type.
+var V575Protocol = protoV575{}

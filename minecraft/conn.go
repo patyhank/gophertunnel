@@ -207,7 +207,7 @@ func (conn *Conn) GameData() GameData {
 // obtained using a minecraft.Listener. The game data passed will be used to spawn the player in the world of
 // the server. To spawn a Conn obtained from a call to minecraft.Dial(), use Conn.DoSpawn().
 func (conn *Conn) StartGame(data GameData) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return conn.StartGameContext(ctx, data)
 }
@@ -667,8 +667,13 @@ func (conn *Conn) handleRequestNetworkSettings(pk *packet.RequestNetworkSettings
 		}
 	}
 	if !found {
-		conn.proto = conn.acceptedProto[0]
-		conn.pool = conn.acceptedProto[0].Packets()
+
+		conn.proto = DefaultProtocol
+		conn.pool = DefaultProtocol.Packets()
+		if pk.ClientProtocol > 567 && pk.ClientProtocol <= 575 {
+			conn.proto = V575Protocol
+			conn.pool = V575Protocol.Packets()
+		}
 		//	status := packet.PlayStatusLoginFailedClient
 		//	if pk.ClientProtocol > protocol.CurrentProtocol {
 		//		// The server is outdated in this case, so we have to change the status we send.
@@ -1037,6 +1042,44 @@ func (conn *Conn) startGame() {
 			BaseGameVersion:              data.BaseGameVersion,
 			GameVersion:                  conn.clientData.GameVersion,
 		})
+	} else if strings.HasPrefix(conn.clientData.GameVersion, "1.19.6") || strings.HasPrefix(conn.clientData.GameVersion, "1.19.7") {
+		_ = conn.WritePacket(&packet.StartGamev567{
+			Difficulty:                   data.Difficulty,
+			EntityUniqueID:               data.EntityUniqueID,
+			EntityRuntimeID:              data.EntityRuntimeID,
+			PlayerGameMode:               data.PlayerGameMode,
+			PlayerPosition:               data.PlayerPosition,
+			Pitch:                        data.Pitch,
+			Yaw:                          data.Yaw,
+			WorldSeed:                    data.WorldSeed,
+			Dimension:                    data.Dimension,
+			WorldSpawn:                   data.WorldSpawn,
+			EditorWorld:                  data.EditorWorld,
+			PersonaDisabled:              data.PersonaDisabled,
+			CustomSkinsDisabled:          data.CustomSkinsDisabled,
+			GameRules:                    data.GameRules,
+			Time:                         data.Time,
+			Blocks:                       data.CustomBlocks,
+			Items:                        data.Items,
+			AchievementsDisabled:         true,
+			Generator:                    1,
+			EducationFeaturesEnabled:     true,
+			MultiPlayerGame:              true,
+			MultiPlayerCorrelationID:     uuid.Must(uuid.NewRandom()).String(),
+			CommandsEnabled:              true,
+			WorldName:                    data.WorldName,
+			LANBroadcastEnabled:          true,
+			PlayerMovementSettings:       data.PlayerMovementSettings,
+			WorldGameMode:                data.WorldGameMode,
+			ServerAuthoritativeInventory: data.ServerAuthoritativeInventory,
+			PlayerPermissions:            data.PlayerPermissions,
+			Experiments:                  data.Experiments,
+			ClientSideGeneration:         data.ClientSideGeneration,
+			ChatRestrictionLevel:         data.ChatRestrictionLevel,
+			DisablePlayerInteractions:    data.DisablePlayerInteractions,
+			BaseGameVersion:              data.BaseGameVersion,
+			GameVersion:                  protocol.CurrentVersion,
+		})
 	} else {
 		_ = conn.WritePacket(&packet.StartGame{
 			Difficulty:                   data.Difficulty,
@@ -1077,7 +1120,7 @@ func (conn *Conn) startGame() {
 		})
 	}
 	_ = conn.Flush()
-	conn.expect(packet.IDRequestChunkRadius, packet.IDSetLocalPlayerAsInitialised)
+	//conn.expect(packet.IDRequestChunkRadius, packet.IDSetLocalPlayerAsInitialised)
 }
 
 // nextResourcePackDownload moves to the next resource pack to download and sends a resource pack data info

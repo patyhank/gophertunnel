@@ -7,21 +7,10 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 )
 
-const (
-	SpawnBiomeTypeDefault = iota
-	SpawnBiomeTypeUserDefined
-)
-
-const (
-	ChatRestrictionLevelNone     = 0
-	ChatRestrictionLevelDropped  = 1
-	ChatRestrictionLevelDisabled = 2
-)
-
-// StartGame is sent by the server to send information about the world the player will be spawned in. It
+// StartGamev567 is sent by the server to send information about the world the player will be spawned in. It
 // contains information about the position the player spawns in, and information about the world in general
 // such as its game rules.
-type StartGame struct {
+type StartGamev567 struct {
 	// EntityUniqueID is the unique ID of the player. The unique ID is a value that remains consistent across
 	// different sessions of the same world, but most servers simply fill the runtime ID of the entity out for
 	// this field.
@@ -230,84 +219,80 @@ type StartGame struct {
 }
 
 // ID ...
-func (*StartGame) ID() uint32 {
+func (*StartGamev567) ID() uint32 {
 	return IDStartGame
 }
 
-func (pk *StartGame) Marshal(io protocol.IO) {
-	fal := false
-	fafl := false
-	io.Varint64(&pk.EntityUniqueID)
-	io.Varuint64(&pk.EntityRuntimeID)
-	io.Varint32(&pk.PlayerGameMode)
-	io.Vec3(&pk.PlayerPosition)
-	io.Float32(&pk.Pitch)
-	io.Float32(&pk.Yaw)
-	io.Int64(&pk.WorldSeed)
-	io.Int16(&pk.SpawnBiomeType)
-	io.String(&pk.UserDefinedBiomeName)
-	io.Varint32(&pk.Dimension)
-	io.Varint32(&pk.Generator)
-	io.Varint32(&pk.WorldGameMode)
-	io.Varint32(&pk.Difficulty)
-	io.UBlockPos(&pk.WorldSpawn)
-	io.Bool(&pk.AchievementsDisabled)
-	io.Bool(&pk.EditorWorld)
-	io.Bool(&fal)
-	io.Bool(&fafl)
-	io.Varint32(&pk.DayCycleLockTime)
-	io.Varint32(&pk.EducationEditionOffer)
-	io.Bool(&pk.EducationFeaturesEnabled)
-	io.String(&pk.EducationProductID)
-	io.Float32(&pk.RainLevel)
-	io.Float32(&pk.LightningLevel)
-	io.Bool(&pk.ConfirmedPlatformLockedContent)
-	io.Bool(&pk.MultiPlayerGame)
-	io.Bool(&pk.LANBroadcastEnabled)
-	io.Varint32(&pk.XBLBroadcastMode)
-	io.Varint32(&pk.PlatformBroadcastMode)
-	io.Bool(&pk.CommandsEnabled)
-	io.Bool(&pk.TexturePackRequired)
-	protocol.FuncSlice(io, &pk.GameRules, io.GameRule)
-	protocol.SliceUint32Length(io, &pk.Experiments)
-	io.Bool(&pk.ExperimentsPreviouslyToggled)
-	io.Bool(&pk.BonusChestEnabled)
-	io.Bool(&pk.StartWithMapEnabled)
-	io.Varint32(&pk.PlayerPermissions)
-	io.Int32(&pk.ServerChunkTickRadius)
-	io.Bool(&pk.HasLockedBehaviourPack)
-	io.Bool(&pk.HasLockedTexturePack)
-	io.Bool(&pk.FromLockedWorldTemplate)
-	io.Bool(&pk.MSAGamerTagsOnly)
-	io.Bool(&pk.FromWorldTemplate)
-	io.Bool(&pk.WorldTemplateSettingsLocked)
-	io.Bool(&pk.OnlySpawnV1Villagers)
-	io.Bool(&pk.PersonaDisabled)
-	io.Bool(&pk.CustomSkinsDisabled)
-	io.Bool(&pk.EmoteChatMuted)
-	io.String(&pk.BaseGameVersion)
-	io.Int32(&pk.LimitedWorldWidth)
-	io.Int32(&pk.LimitedWorldDepth)
-	io.Bool(&pk.NewNether)
-	protocol.Single(io, &pk.EducationSharedResourceURI)
-	protocol.OptionalFunc(io, &pk.ForceExperimentalGameplay, io.Bool)
-	io.Uint8(&pk.ChatRestrictionLevel)
-	io.Bool(&pk.DisablePlayerInteractions)
-	io.String(&pk.LevelID)
-	io.String(&pk.WorldName)
-	io.String(&pk.TemplateContentIdentity)
-	io.Bool(&pk.Trial)
-	protocol.PlayerMoveSettings(io, &pk.PlayerMovementSettings)
-	io.Int64(&pk.Time)
-	io.Varint32(&pk.EnchantmentSeed)
-	protocol.Slice(io, &pk.Blocks)
-	protocol.Slice(io, &pk.Items)
-	io.String(&pk.MultiPlayerCorrelationID)
-	io.Bool(&pk.ServerAuthoritativeInventory)
-	io.String(&pk.GameVersion)
-	io.NBT(&pk.PropertyData, nbt.NetworkLittleEndian)
-	io.Uint64(&pk.ServerBlockStateChecksum)
-	io.UUID(&pk.WorldTemplateID)
-	io.Bool(&pk.ClientSideGeneration)
-	io.Bool(&fafl)
+// Marshal ...
+func (pk *StartGamev567) Marshal(w protocol.IO) {
+	w.Varint64(&pk.EntityUniqueID)
+	w.Varuint64(&pk.EntityRuntimeID)
+	w.Varint32(&pk.PlayerGameMode)
+	w.Vec3(&pk.PlayerPosition)
+	w.Float32(&pk.Pitch)
+	w.Float32(&pk.Yaw)
+	w.Int64(&pk.WorldSeed)
+	w.Int16(&pk.SpawnBiomeType)
+	w.String(&pk.UserDefinedBiomeName)
+	w.Varint32(&pk.Dimension)
+	w.Varint32(&pk.Generator)
+	w.Varint32(&pk.WorldGameMode)
+	w.Varint32(&pk.Difficulty)
+	w.UBlockPos(&pk.WorldSpawn)
+	w.Bool(&pk.AchievementsDisabled)
+	w.Bool(&pk.EditorWorld)
+	w.Varint32(&pk.DayCycleLockTime)
+	w.Varint32(&pk.EducationEditionOffer)
+	w.Bool(&pk.EducationFeaturesEnabled)
+	w.String(&pk.EducationProductID)
+	w.Float32(&pk.RainLevel)
+	w.Float32(&pk.LightningLevel)
+	w.Bool(&pk.ConfirmedPlatformLockedContent)
+	w.Bool(&pk.MultiPlayerGame)
+	w.Bool(&pk.LANBroadcastEnabled)
+	w.Varint32(&pk.XBLBroadcastMode)
+	w.Varint32(&pk.PlatformBroadcastMode)
+	w.Bool(&pk.CommandsEnabled)
+	w.Bool(&pk.TexturePackRequired)
+	protocol.FuncSlice(w, &pk.GameRules, w.GameRule)
+	protocol.SliceUint32Length(w, &pk.Experiments)
+	w.Bool(&pk.ExperimentsPreviouslyToggled)
+	w.Bool(&pk.BonusChestEnabled)
+	w.Bool(&pk.StartWithMapEnabled)
+	w.Varint32(&pk.PlayerPermissions)
+	w.Int32(&pk.ServerChunkTickRadius)
+	w.Bool(&pk.HasLockedBehaviourPack)
+	w.Bool(&pk.HasLockedTexturePack)
+	w.Bool(&pk.FromLockedWorldTemplate)
+	w.Bool(&pk.MSAGamerTagsOnly)
+	w.Bool(&pk.FromWorldTemplate)
+	w.Bool(&pk.WorldTemplateSettingsLocked)
+	w.Bool(&pk.OnlySpawnV1Villagers)
+	w.Bool(&pk.PersonaDisabled)
+	w.Bool(&pk.CustomSkinsDisabled)
+	w.Bool(&pk.EmoteChatMuted)
+	w.String(&pk.BaseGameVersion)
+	w.Int32(&pk.LimitedWorldWidth)
+	w.Int32(&pk.LimitedWorldDepth)
+	w.Bool(&pk.NewNether)
+	protocol.Single(w, &pk.EducationSharedResourceURI)
+	protocol.OptionalFunc(w, &pk.ForceExperimentalGameplay, w.Bool)
+	w.Uint8(&pk.ChatRestrictionLevel)
+	w.Bool(&pk.DisablePlayerInteractions)
+	w.String(&pk.LevelID)
+	w.String(&pk.WorldName)
+	w.String(&pk.TemplateContentIdentity)
+	w.Bool(&pk.Trial)
+	protocol.PlayerMoveSettings(w, &pk.PlayerMovementSettings)
+	w.Int64(&pk.Time)
+	w.Varint32(&pk.EnchantmentSeed)
+	protocol.Slice(w, &pk.Blocks)
+	protocol.Slice(w, &pk.Items)
+	w.String(&pk.MultiPlayerCorrelationID)
+	w.Bool(&pk.ServerAuthoritativeInventory)
+	w.String(&pk.GameVersion)
+	w.NBT(&pk.PropertyData, nbt.NetworkLittleEndian)
+	w.Uint64(&pk.ServerBlockStateChecksum)
+	w.UUID(&pk.WorldTemplateID)
+	w.Bool(&pk.ClientSideGeneration)
 }
