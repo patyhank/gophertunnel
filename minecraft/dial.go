@@ -7,6 +7,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/sandertv/go-raknet"
@@ -16,6 +17,7 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	"golang.org/x/oauth2"
+	"gopkg.in/square/go-jose.v2/jwt"
 	"log"
 	rand2 "math/rand"
 	"net"
@@ -59,6 +61,16 @@ type Dialer struct {
 	// and version of the resource pack, the number of the current pack being downloaded, and the total amount of packs.
 	// The boolean returned determines if the pack will be downloaded or not.
 	DownloadResourcePack func(id uuid.UUID, version string, current, total int) bool
+
+	// DisconnectOnUnknownPackets specifies if the connection should disconnect if packets received are not present
+	// in the packet pool. If true, such packets lead to the connection being closed immediately.
+	// If set to false, the packets will be returned as a packet.Unknown.
+	DisconnectOnUnknownPackets bool
+
+	// DisconnectOnInvalidPackets specifies if invalid packets (either too few bytes or too many bytes) should be
+	// allowed. If true, such packets lead to the connection being closed immediately. If false,
+	// packets with too many bytes will be returned while packets with too few bytes will be skipped.
+	DisconnectOnInvalidPackets bool
 
 	// Protocol is the Protocol version used to communicate with the target server. By default, this field is
 	// set to the current protocol as implemented in the minecraft/protocol package. Note that packets written
@@ -143,6 +155,7 @@ func (d Dialer) DialContext(ctx context.Context, network, address string) (conn 
 		if err != nil {
 			return nil, &net.OpError{Op: "dial", Net: "minecraft", Err: err}
 		}
+		d.IdentityData = readChainIdentityData([]byte(chainData))
 	}
 	if d.ErrorLog == nil {
 		d.ErrorLog = log.New(os.Stderr, "", log.LstdFlags)
@@ -170,16 +183,15 @@ func (d Dialer) DialContext(ctx context.Context, network, address string) (conn 
 		return nil, err
 	}
 
-	conn = newConn(netConn, key, d.ErrorLog, d.Protocol, d.FlushRate)
-	conn.pool = conn.proto.Packets()
+	conn = newConn(netConn, key, d.ErrorLog, d.Protocol, d.FlushRate, false)
+	conn.pool = conn.proto.Packets(false)
 	conn.identityData = d.IdentityData
 	conn.clientData = d.ClientData
 	conn.packetFunc = d.PacketFunc
 	conn.downloadResourcePack = d.DownloadResourcePack
 	conn.cacheEnabled = d.EnableClientCache
-
-	// Disable the batch packet limit so that the server can send packets as often as it wants to.
-	conn.dec.DisableBatchPacketLimit()
+	conn.disconnectOnInvalidPacket = d.DisconnectOnInvalidPackets
+	conn.disconnectOnUnknownPacket = d.DisconnectOnUnknownPackets
 
 	defaultIdentityData(&conn.identityData)
 	defaultClientData(address, conn.identityData.DisplayName, &conn.clientData)
@@ -237,6 +249,30 @@ func (d Dialer) DialContext(ctx context.Context, network, address string) (conn 
 			return conn, nil
 		}
 	}
+}
+
+// readChainIdentityData reads a login.IdentityData from the Mojang chain
+// obtained through authentication.
+func readChainIdentityData(chainData []byte) login.IdentityData {
+	chain := struct{ Chain []string }{}
+	if err := json.Unmarshal(chainData, &chain); err != nil {
+		panic("invalid chain data from authentication: " + err.Error())
+	}
+	data := chain.Chain[1]
+	claims := struct {
+		ExtraData login.IdentityData `json:"extraData"`
+	}{}
+	tok, err := jwt.ParseSigned(data)
+	if err != nil {
+		panic("invalid chain data from authentication: " + err.Error())
+	}
+	if err := tok.UnsafeClaimsWithoutVerification(&claims); err != nil {
+		panic("invalid chain data from authentication: " + err.Error())
+	}
+	if claims.ExtraData.Identity == "" {
+		panic("chain data contained no data")
+	}
+	return claims.ExtraData
 }
 
 // listenConn listens on the connection until it is closed on another goroutine. The channel passed will

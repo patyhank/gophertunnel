@@ -425,34 +425,39 @@ func (w *Writer) AbilityValue(x *any) {
 	}
 }
 
-// Commands writes a Command slice and its constraints to a writer.
-func (w *Writer) Commands(commands *[]Command, constraints *[]CommandEnumConstraint) {
-	values, valueIndices := enumValues(*commands)
-	suffixes, suffixIndices := suffixes(*commands)
-	enums, enumIndices := enums(*commands)
-	dynamicEnums, dynamicEnumIndices := dynamicEnums(*commands)
-
-	ctx := AvailableCommandsContext{
-		EnumIndices:        enumIndices,
-		EnumValueIndices:   valueIndices,
-		SuffixIndices:      suffixIndices,
-		DynamicEnumIndices: dynamicEnumIndices,
+// CompressedBiomeDefinitions reads a list of compressed biome definitions from the reader. Minecraft decided to make their
+// own type of compression for this, so we have to implement it ourselves. It uses a dictionary of repeated byte sequences
+// to reduce the size of the data. The compressed data is read byte-by-byte, and if the byte is 0xff then it is assumed
+// that the next two bytes are an int16 for the dictionary index. Otherwise, the byte is copied to the output. The dictionary
+// index is then used to look up the byte sequence to be appended to the output.
+func (w *Writer) CompressedBiomeDefinitions(x *map[string]any) {
+	decompressed, err := nbt.Marshal(x)
+	if err != nil {
+		w.panicf("error marshaling nbt: %v", err)
 	}
 
-	// Start by writing all enum values and suffixes to the buffer.
-	FuncSlice(w, &values, w.String)
-	FuncSlice(w, &suffixes, w.String)
+	var compressed []byte
+	buf := bytes.NewBuffer(compressed)
+	bufWriter := NewWriter(buf, w.shieldID)
 
-	// After that all actual enums, which point to enum values rather than directly writing strings.
-	FuncIOSlice(w, &enums, ctx.WriteEnum)
+	header := []byte("COMPRESSED")
+	bufWriter.Bytes(&header)
 
-	// Finally we write the command data which includes all usages of the commands.
-	FuncIOSlice(w, commands, ctx.WriteCommandData)
+	// TODO: Dictionary compression implementation
+	var dictionaryLength uint16
+	bufWriter.Uint16(&dictionaryLength)
+	for _, b := range decompressed {
+		bufWriter.Uint8(&b)
+		if b == 0xff {
+			dictionaryIndex := int16(1)
+			bufWriter.Int16(&dictionaryIndex)
+		}
+	}
 
-	// Soft enums follow, which may be changed after sending this packet.
-	Slice(w, &dynamicEnums)
-
-	FuncIOSlice(w, constraints, ctx.WriteEnumConstraint)
+	compressed = buf.Bytes()
+	length := uint32(len(compressed))
+	w.Varuint32(&length)
+	w.Bytes(&compressed)
 }
 
 // Varint64 writes an int64 as 1-10 bytes to the underlying buffer.

@@ -75,6 +75,12 @@ type StartGame struct {
 	// EditorWorld is a value to dictate if the world is in editor mode, a special mode recently introduced adding
 	// "powerful tools for editing worlds, intended for experienced creators."
 	EditorWorld bool
+	// CreatedInEditor is a value to dictate if the world was created as a project in the editor mode. The functionality
+	// of this field is currently unknown.
+	CreatedInEditor bool
+	// ExportedFromEditor is a value to dictate if the world was exported from editor mode. The functionality of this
+	// field is currently unknown.
+	ExportedFromEditor bool
 	// DayCycleLockTime is the time at which the day cycle was locked if the day cycle is disabled using the
 	// respective game rule. The client will maintain this time as long as the day cycle is disabled.
 	DayCycleLockTime int32
@@ -227,6 +233,12 @@ type StartGame struct {
 	ChatRestrictionLevel uint8
 	// DisablePlayerInteractions is true if the client should ignore other players when interacting with the world.
 	DisablePlayerInteractions bool
+	// UseBlockNetworkIDHashes is true if the client should use the hash of a block's name as its network ID rather than
+	// its index in the expected block palette. This is useful for servers that wish to support multiple protocol versions
+	// and custom blocks, but it will result in extra bytes being written for every block in a sub chunk palette.
+	UseBlockNetworkIDHashes bool
+	// ServerAuthoritativeSound is currently unknown as to what it does.
+	ServerAuthoritativeSound bool
 }
 
 // ID ...
@@ -235,8 +247,6 @@ func (*StartGame) ID() uint32 {
 }
 
 func (pk *StartGame) Marshal(io protocol.IO) {
-	fal := false
-	fafl := false
 	io.Varint64(&pk.EntityUniqueID)
 	io.Varuint64(&pk.EntityRuntimeID)
 	io.Varint32(&pk.PlayerGameMode)
@@ -253,8 +263,8 @@ func (pk *StartGame) Marshal(io protocol.IO) {
 	io.UBlockPos(&pk.WorldSpawn)
 	io.Bool(&pk.AchievementsDisabled)
 	io.Bool(&pk.EditorWorld)
-	io.Bool(&fal)
-	io.Bool(&fafl)
+	io.Bool(&pk.CreatedInEditor)
+	io.Bool(&pk.ExportedFromEditor)
 	io.Varint32(&pk.DayCycleLockTime)
 	io.Varint32(&pk.EducationEditionOffer)
 	io.Bool(&pk.EducationFeaturesEnabled)
@@ -309,5 +319,6 @@ func (pk *StartGame) Marshal(io protocol.IO) {
 	io.Uint64(&pk.ServerBlockStateChecksum)
 	io.UUID(&pk.WorldTemplateID)
 	io.Bool(&pk.ClientSideGeneration)
-	io.Bool(&fafl)
+	io.Bool(&pk.UseBlockNetworkIDHashes)
+	io.Bool(&pk.ServerAuthoritativeSound)
 }

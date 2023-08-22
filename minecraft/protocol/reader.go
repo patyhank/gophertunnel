@@ -21,15 +21,16 @@ type Reader struct {
 		io.Reader
 		io.ByteReader
 	}
-	shieldID int32
+	shieldID      int32
+	limitsEnabled bool
 }
 
 // NewReader creates a new Reader using the io.ByteReader passed as underlying source to read bytes from.
 func NewReader(r interface {
 	io.Reader
 	io.ByteReader
-}, shieldID int32) *Reader {
-	return &Reader{r: r, shieldID: shieldID}
+}, shieldID int32, enableLimits bool) *Reader {
+	return &Reader{r: r, shieldID: shieldID, limitsEnabled: enableLimits}
 }
 
 // Uint8 reads a uint8 from the underlying buffer.
@@ -379,7 +380,7 @@ func (r *Reader) ItemInstance(i *ItemInstance) {
 	r.ByteSlice(&extraData)
 
 	buf := bytes.NewBuffer(extraData)
-	bufReader := NewReader(buf, r.shieldID)
+	bufReader := NewReader(buf, r.shieldID, r.limitsEnabled)
 
 	var length int16
 	bufReader.Int16(&length)
@@ -427,7 +428,7 @@ func (r *Reader) Item(x *ItemStack) {
 	r.ByteSlice(&extraData)
 
 	buf := bytes.NewBuffer(extraData)
-	bufReader := NewReader(buf, r.shieldID)
+	bufReader := NewReader(buf, r.shieldID, r.limitsEnabled)
 
 	var length int16
 	bufReader.Int16(&length)
@@ -520,37 +521,57 @@ func (r *Reader) AbilityValue(x *any) {
 	}
 }
 
-// Commands reads a Command slice and its constraints from a reader.
-func (r *Reader) Commands(commands *[]Command, constraints *[]CommandEnumConstraint) {
-	var ctx AvailableCommandsContext
+// CompressedBiomeDefinitions reads a list of compressed biome definitions from the reader. Minecraft decided to make their
+// own type of compression for this, so we have to implement it ourselves. It uses a dictionary of repeated byte sequences
+// to reduce the size of the data. The compressed data is read byte-by-byte, and if the byte is 0xff then it is assumed
+// that the next two bytes are an int16 for the dictionary index. Otherwise, the byte is copied to the output. The dictionary
+// index is then used to look up the byte sequence to be appended to the output.
+func (r *Reader) CompressedBiomeDefinitions(x *map[string]any) {
+	var length uint32
+	header := make([]byte, 10)
+	r.Varuint32(&length)
+	if _, err := r.r.Read(header); err != nil {
+		r.panic(err)
+	}
+	if !bytes.Equal(header, []byte("COMPRESSED")) {
+		r.InvalidValue(header, "compression header", fmt.Sprintf("must be COMPRESSED (%v)", []byte("COMPRESSED")))
+		return
+	}
 
-	// First we read all the enum values and suffixes.
-	FuncSlice(r, &ctx.EnumValues, r.String)
-	FuncSlice(r, &ctx.Suffixes, r.String)
-
-	// After that we create all enums, which are composed of pointers to the enum values above.
-	FuncIOSlice(r, &ctx.Enums, ctx.Enum)
-
-	// We read all the commands, which will have their enums and suffixes set automatically. We don't yet set
-	// the dynamic enums as we haven't read them yet.
-	FuncIOSlice(r, commands, ctx.CommandData)
-
-	// We first read all soft enums of the packet.
-	Slice(r, &ctx.DynamicEnums)
-
-	// After we've read all soft enums, we need to match them with the values that are set in the commands
-	// that we read before.
-	for i, command := range *commands {
-		for j, overload := range command.Overloads {
-			for k, param := range overload.Parameters {
-				if param.Type&CommandArgSoftEnum != 0 {
-					(*commands)[i].Overloads[j].Parameters[k].Enum = ctx.DynamicEnums[param.Type&0xffff]
-				}
-			}
+	var dictLength uint16
+	var entryLength uint8
+	r.Uint16(&dictLength)
+	dictionary := make([][]byte, dictLength)
+	for i := 0; i < int(dictLength); i++ {
+		r.Uint8(&entryLength)
+		dictionary[i] = make([]byte, int(entryLength))
+		if _, err := r.r.Read(dictionary[i]); err != nil {
+			r.panic(err)
 		}
 	}
 
-	FuncIOSlice(r, constraints, ctx.EnumConstraint)
+	var decompressed []byte
+	var dictIndex int16
+	for {
+		key, err := r.r.ReadByte()
+		if err != nil {
+			break
+		}
+		if key != 0xff {
+			decompressed = append(decompressed, key)
+			continue
+		}
+
+		r.Int16(&dictIndex)
+		if dictIndex >= 0 && int(dictIndex) < len(dictionary) {
+			decompressed = append(decompressed, dictionary[dictIndex]...)
+			continue
+		}
+		decompressed = append(decompressed, key)
+	}
+	if err := nbt.Unmarshal(decompressed, x); err != nil {
+		r.panic(err)
+	}
 }
 
 // LimitUint32 checks if the value passed is lower than the limit passed. If not, the Reader panics.
